@@ -255,13 +255,12 @@ def predict_softmax(args):
     model = model.cuda()
 
     model.eval()
-    test_loader = get_test_loader(num_classes=args.num_classes, batch_size=args.batch_size, dev_mode=args.dev_mode)
+    test_loader = get_test_loader(batch_size=args.batch_size, dev_mode=args.dev_mode)
 
     preds = None
     scores = None
-    founds = None
     with torch.no_grad():
-        for i, (x, found) in enumerate(test_loader):
+        for i, x in enumerate(test_loader):
             x = x.cuda()
             #output = torch.sigmoid(model(x))
             #print(x[0, 0, :])
@@ -279,45 +278,25 @@ def predict_softmax(args):
             else:
                 preds = torch.cat([preds, pred.cpu()], 0)
             
-            if scores is None:
-                scores = score.cpu()
-            else:
-                scores = torch.cat([scores, score.cpu()], 0)
-
-            if founds is None:
-                founds = found
-            else:
-                founds = torch.cat([founds, found], 0)
-
             print('{}/{}'.format(args.batch_size*(i+1), test_loader.num), end='\r')
 
-    classes, stoi = get_classes(num_classes=args.num_classes)
     preds = preds.numpy()
-    scores = scores.numpy()
     print(preds.shape)
-
-    pred_labels = [classes[i] for i in preds]
     
-    create_submission(args, pred_labels, scores, founds, args.sub_file)
+    create_submission(args, preds, args.sub_file)
 
-def create_submission(args, predictions, scores, founds, outfile):
-    meta = pd.read_csv(os.path.join(settings.DATA_DIR, 'test', 'test.csv'))
-    labels = ['{} {:.6f}'.format(i, j) for i, j in zip(predictions, scores)]
-
-    for i in range(len(labels)):
-        if founds[i] == 0:
-            labels[i] = ''
+def create_submission(args, predictions, outfile):
+    meta = pd.read_csv(os.path.join(settings.DATA_DIR, 'test.csv'))
 
     if args.dev_mode:
         meta = meta.iloc[:len(predictions)]  # for dev mode
-        print(labels[:4])
-    meta['landmarks'] = labels
-    meta.to_csv(outfile, index=False, columns=['id', 'landmarks'])
+        print(predictions[:4])
+    meta['predicted'] = predictions
+    meta.to_csv(outfile, index=False, columns=['id', 'predicted'])
 
 def test_model(args):
     model, _ = create_model(args)
     model.cuda()
-
     
     torch.manual_seed(1234)
     x = torch.randn(2,3, 256,256).cuda()
